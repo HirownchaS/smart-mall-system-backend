@@ -1,10 +1,20 @@
 const Booking = require("../models/Booking");
 const ParkingSlot = require("../models/ParkingSlot");
 const User = require("../models/User");
+const cron = require("node-cron");
 
 // Create a new booking
 exports.createBooking = async (req, res) => {
-  const { slot, carNumber, userId, time } = req.body;
+  const { slot, carNumber, userId, arrivalTime, departureTime, bookingDate } =
+    req.body;
+  console.log(
+    "arrival",
+    arrivalTime,
+    "depature",
+    departureTime,
+    "user",
+    userId
+  );
 
   try {
     // Check if the parking slot exists
@@ -29,10 +39,10 @@ exports.createBooking = async (req, res) => {
         user: userId,
         parkingSlot: parkingSlot._id,
         carNumber: carNumber,
-        bookingTime: time,
+        bookingDate: bookingDate,
         isActive: true,
-        arrivalTime: null,
-        departureTime: null
+        arrivalTime: arrivalTime,
+        departureTime: departureTime,
       });
       await newBooking.save(); // Save the booking record
 
@@ -43,9 +53,9 @@ exports.createBooking = async (req, res) => {
       user.isActive = true;
       user.carNumber = carNumber;
       user.parkingSlot = parkingSlot._id;
-      user.bookingTime = time;
-      user.arrivalTime = null;
-      user.departureTime = null;
+      user.bookingDate = bookingDate;
+      user.arrivalTime = arrivalTime;
+      user.departureTime = departureTime;
 
       // No need to redeclare parkingSlot, just reuse it
       parkingSlot.isBooked = true;
@@ -67,7 +77,6 @@ exports.createBooking = async (req, res) => {
 
 exports.getBookingTimeById = async (req, res) => {
   try {
-    
     const booking = await Booking.findById(req.params.bookingId);
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
@@ -82,8 +91,9 @@ exports.getBookingTimeById = async (req, res) => {
 // Get a specific booking by ID
 exports.getBookingById = async (req, res) => {
   try {
-    
-    const booking = await Booking.findById(req.params.bookingId).populate("user").populate("parkingSlot");
+    const booking = await Booking.findById(req.params.bookingId)
+      .populate("user")
+      .populate("parkingSlot");
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
     }
@@ -215,8 +225,8 @@ exports.getAllBookings = async (req, res) => {
 exports.disableBooking = async (req, res) => {
   try {
     const id = req.params.pId;
-    const time = req.body.time; 
-    
+    const time = req.body.time;
+
     // Log the booking ID and time for debugging
     console.log(`Booking ID: ${id}, Time: ${time}`);
 
@@ -242,7 +252,9 @@ exports.disableBooking = async (req, res) => {
     const departureTime = new Date(booking.departureTime);
 
     // Log arrival and departure times to ensure they are valid
-    console.log(`Arrival Time: ${arrivalTime}, Departure Time: ${departureTime}`);
+    console.log(
+      `Arrival Time: ${arrivalTime}, Departure Time: ${departureTime}`
+    );
 
     const hours = Math.round(Math.abs(departureTime - arrivalTime) / 36e5); // Hours difference
     const hourlyRate = 100; // Replace with the actual rate if dynamic
@@ -253,7 +265,12 @@ exports.disableBooking = async (req, res) => {
     // Log total hours and cost for debugging
     console.log(`Total Hours: ${hours}, Total Cost: ${totalCost}`);
 
-    res.status(200).json({ message: "Booking disabled successfully", totalCost, arrivalTime, departureTime });
+    res.status(200).json({
+      message: "Booking disabled successfully",
+      totalCost,
+      arrivalTime,
+      departureTime,
+    });
   } catch (error) {
     // Log the entire error for better understanding
     console.error("Server Error: ", error);
@@ -261,9 +278,8 @@ exports.disableBooking = async (req, res) => {
   }
 };
 
-
 exports.updateTime = async (req, res) => {
-  try{
+  try {
     const id = req.params.bookingId;
     const time = req.body.time;
     console.log(time);
@@ -271,9 +287,8 @@ exports.updateTime = async (req, res) => {
     booking.arrivalTime = time;
     console.log(booking.arrivalTime);
     await booking.save();
-    res.status(200).json({ message: "Time updated successfully" });  
-  }
-  catch(error){
+    res.status(200).json({ message: "Time updated successfully" });
+  } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 };
@@ -292,8 +307,35 @@ exports.calculateBill = async (req, res) => {
     const hours = Math.abs(departureTime - arrivalTime) / 36e5;
     const totalCost = Math.round(hours * hourlyRate);
 
-    res.status(200).json({ totalCost,arrivalTime,departureTime });
+    res.status(200).json({ totalCost, arrivalTime, departureTime });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
-}
+};
+
+cron.schedule("* * * * *", async () => {
+  console.log("scheduler starting");
+
+  const timeStampsSeconds = Date.now();
+  const activeBookings = await Booking.find({
+    isActive: true,
+  }).populate("parkingSlot");
+
+  activeBookings.forEach(async (booking) => {
+    const dateTimeString = `${booking.bookingDate}T${booking.departureTime}:00`;
+    const bookingTimestamp = new Date(dateTimeString).getTime();
+
+    if (bookingTimestamp < timeStampsSeconds) {
+      const parkingSlot = await ParkingSlot.findById(booking.parkingSlot._id);
+      parkingSlot.isBooked = false;
+      await parkingSlot.save();
+
+      booking.isActive = false;
+      await booking.save();
+
+      console.log(`Disabled expired booking: ${booking.parkingSlot._id}`);
+    } else {
+      console.log(`booking not expired ${booking.parkingSlot._id}`);
+    }
+  });
+});

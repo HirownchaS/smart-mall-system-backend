@@ -52,7 +52,8 @@ const deleteAdvertisement = async (req, res) => {
         if (!ad) {
             return res.status(404).send();
         }
-        res.status(200).send(ad);
+        res.status(200).json({ message: 'advetisement deleted successfully' });
+        // res.status(200).send(ad);
     } catch (error) {
         res.status(500).send(error);
     }

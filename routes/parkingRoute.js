@@ -12,4 +12,11 @@ router.put('/time/:bookingId', parkController.updateTime);
 router.get('/time/:bookingId', parkController.getBookingTimeById);
 router.get('/bill/:bookingId', parkController.calculateBill);
 
+
+
+// router.put("/bookings/:bookingId/arrival", bookingController.updateArrivalTime);
+// router.put("/bookings/:bookingId/departure", bookingController.updateDepartureTime);
+// router.get("/bookings/:bookingId/times", bookingController.getBookingTimes);
+
+
 module.exports = router
