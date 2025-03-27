@@ -1,7 +1,8 @@
 const express = require("express");
-const { model } = require("mongoose");
+const mongoose = require("mongoose");
 const Event = require("../models/Event");
-
+const User = require("../models/User");
+const RegisterEvent = require("../models/Visitor");
 const eventController = {
   createEvent: async (req, res) => {
     try {
@@ -66,6 +67,47 @@ const eventController = {
       res.json(updatedEvent);
     } catch (err) {
       res.status(500).send(err.message);
+    }
+  },
+
+  registerForEvent: async (req, res) => {
+    const { userId, eventId } = req.body;
+
+    // if (
+    //   !mongoose.Types.ObjectId.isValid(userId) ||
+    //   typeof eventId !== "number"
+    // ) {
+    //   return res.status(400).json({ message: "Invalid User ID or Event ID" });
+    // }
+
+    try {
+      const user = await User.findById(userId);
+      const event = await Event.findOne({ Id: eventId });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+
+      const newRegistration = await RegisterEvent.create({
+        userId: user._id,
+        userName: user.username,
+        userEmail: user.email,
+        eventId,
+      });
+
+      // event.participants.push(userId);
+      // await event.save();
+
+      res.status(200).json({
+        message: "Registration successful",
+        newRegistration,
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Error registering", error: err });
     }
   },
 };
